@@ -218,9 +218,8 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     """RT-2: the manage_connections card's calls reach the session's own open operation, with the legacy handlers' policy and error shape."""
     from pathlib import Path
     from tests.gateway.fixtures.local_recovery_probe import rpc
-    from gateway import session_connections
     from gateway.run import _profile_runtime_scope
-    from tools.connectors import live
+    from tools.connectors import live, run
     from tools.connectors.contract import Actor, TargetState
     from tools import connectors
     from tools.connectors.gateway.errors import GatewayAuthError
@@ -250,7 +249,7 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
         seen.update(names=names, key=get_session_env('HERMES_SESSION_KEY'), platform=get_session_env('HERMES_SESSION_PLATFORM'))
         op.transition('linear', TargetState.initiated, Actor.user)
 
-    session_connections._reissue = rerun
+    run.reissue = rerun
     retried = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
     assert retried.get('result', {}).get('targets', [{}])[0].get('state') == 'initiated', retried
     assert seen == {'names': ['linear'], 'key': authority.sessions[sid].route, 'platform': 'local'}, seen
@@ -258,14 +257,14 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     def auth_failure(op, names):
         raise GatewayAuthError('expired', code='invalid_token', status=401)
 
-    session_connections._reissue = auth_failure
+    run.reissue = auth_failure
     refused = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
     assert refused['error']['code'] == 4032 and refused['error']['data']['reason'] == 'NEEDS_NOUS_AUTH', refused
 
     def broken(op, names):
         raise OSError('transport down')
 
-    session_connections._reissue = broken
+    run.reissue = broken
     failed = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
     assert failed['error']['code'] == 5034 and failed['error']['data']['reason'] == 'CONNECTOR_REQUEST_FAILED', failed
     connectors.connectors_available = lambda *a, **k: False
@@ -280,7 +279,7 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
         live.open(foreign)
     foreign.transition('linear', TargetState.failed, Actor.backend_watcher)
     seen.clear()
-    session_connections._reissue = rerun
+    run.reissue = rerun
     untooled = await rpc(ws, 'connectors.connect', owner={'type': 'session', 'session_id': toolless},
                          connectors=['linear'], reconnect=True)
     assert untooled['error']['code'] == 4031 and seen == {}, untooled

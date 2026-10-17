@@ -113,6 +113,7 @@ def _respond(operation, answer):
 
 def _retry(authority, ref, operation, request):
     """The card's Try again, under the session's own context, as the sidecar ran it for its session."""
+    from tools.connectors import run
     from tools.connectors.gateway.errors import GatewayAuthError
     if not request.reconnect:
         raise ConnectorRefusal(4000, 'INVALID_PARAMS', 'Connector parameters are invalid.')
@@ -125,7 +126,7 @@ def _retry(authority, ref, operation, request):
     with _session_context(authority, ref):
         _require_connectors(authority, ref)
         try:
-            reason = _reissue(operation, request.connectors)
+            reason = run.reissue(operation, request.connectors)
         except RuntimeStoreError:
             raise
         except GatewayAuthError as exc:
@@ -135,11 +136,6 @@ def _retry(authority, ref, operation, request):
     if reason is not None:
         raise ConnectorRefusal(*_REISSUE_REFUSALS.get(reason, (4002, 'REISSUE_REFUSED', 'The target cannot be run again.')))
     return _view(operation)
-
-
-def _reissue(operation, names):
-    from tools.connectors import run
-    return run.reissue(operation, names)
 
 
 def _auth_refusal(exc):

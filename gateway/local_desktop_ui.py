@@ -272,7 +272,7 @@ def wire(turn, agent):
     agent.theme_callback = lambda payload: _theme(turn, agent, dict(payload or {}))
     agent.tour_callback = lambda payload: _tour(turn, agent, dict(payload or {}))
     agent.setup_beat_callback = lambda payload: _setup_beat(turn, agent, dict(payload or {}))
-    # Fire-and-forget like main's: the tool thread waits on its own operation, the card answers by op_id.
+    # Fire-and-forget: the tool thread waits on its own operation; the card answers by op_id.
     agent.connection_callback = lambda payload: publish("connection.request", dict(payload)) and None
     return key, publish
 
