@@ -271,6 +271,24 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     connectors.connectors_available = lambda *a, **k: False
     gated = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
     assert gated['error']['code'] == 4031 and gated['error']['data']['reason'] == 'CONNECTORS_UNAVAILABLE', gated
+    connectors.connectors_available = lambda *a, **k: True
+    # A session whose tools leave out manage_connections cannot re-run a target, even with connectors on.
+    toolless = (await rpc(ws, 'session.create', request_id='routes-toolless', source='gui', toolsets=[],
+                          cwd=str(Path(authority.profile_id) / 'session-work')))['result']['session_id']
+    with _profile_runtime_scope(Path(authority.profile_id)):
+        foreign = ConnectionOperation([Target('linear', 'mcp', 'install')], session_key=authority.sessions[toolless].route)
+        live.open(foreign)
+    foreign.transition('linear', TargetState.failed, Actor.backend_watcher)
+    seen.clear()
+    session_connections._reissue = rerun
+    untooled = await rpc(ws, 'connectors.connect', owner={'type': 'session', 'session_id': toolless},
+                         connectors=['linear'], reconnect=True)
+    assert untooled['error']['code'] == 4031 and seen == {}, untooled
+    # A well-formed envelope with a bad answer is an invalid answer, not invalid parameters.
+    for result in ({'targets': [{'name': 'linear', 'status': 'connected'}]}, None):
+        bad = await rpc(ws, 'connection.respond', owner=owner, op_id=operation.op_id,
+                        **({'result': result} if result is not None else {}))
+        assert bad['error']['code'] == 4002 and bad['error']['data']['reason'] == 'INVALID_ANSWER', bad
 
     answered = await rpc(ws, 'connection.respond', owner=owner, op_id=operation.op_id,
                          result={'targets': [{'name': 'linear', 'status': 'skipped'}]})
