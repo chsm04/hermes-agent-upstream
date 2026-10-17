@@ -269,8 +269,10 @@ class AuthorityConnection:
             return {'jsonrpc': '2.0', 'id': rid, 'result': result}
         except RuntimeStoreError as exc:
             _log_refusal(getattr(self.actor, 'profile_id', None), method, exc)
+            # A connector refusal keeps the legacy handlers' code and message (gateway/session_connections.py).
             return {'jsonrpc': '2.0', 'id': rid, 'error': {
-                'code': 4001, 'message': exc.reason, 'data': _refusal_data(exc)}}
+                'code': getattr(exc, 'wire_code', 4001), 'message': getattr(exc, 'wire_message', exc.reason),
+                'data': _refusal_data(exc)}}
         except sqlite3.Error:
             return {'jsonrpc': '2.0', 'id': rid, 'error': {
                 'code': 5001, 'message': 'storage_unavailable', 'data': {'reason': 'storage_unavailable'}}}
@@ -558,6 +560,7 @@ class AuthorityConnection:
             from gateway.session_policy import policy_for_source, refresh_profile_hooks
             await asyncio.to_thread(refresh_profile_hooks, policy_for_source(self.authority.runner, source))
             info = await snapshot_info(self.authority, snapshot.handle.ref)
+        from gateway.session_connections import pending_connection
         display = {}
         if params.get('display_projection'):
             display['display_messages'] = display_projection(snapshot.history, self.authority.profile_id)
@@ -569,7 +572,8 @@ class AuthorityConnection:
                 'subscription_id': snapshot.subscription_id, 'revision': snapshot.handle.revision,
                 'execution_generation': snapshot.handle.execution_generation,
                 'pending': [asdict(r) for r in snapshot.pending],
-                'prompts': list(snapshot.prompts), 'info': info}
+                'prompts': list(snapshot.prompts), 'info': info,
+                'pending_connection': pending_connection(self.authority, ref.session_id)}
 
     def _spawn_notice(self, ref):
         """Low-disk auto-prune question for this viewer, off the resume reply's path."""

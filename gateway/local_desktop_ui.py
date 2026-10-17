@@ -80,7 +80,6 @@ _tour_bridge: dict[str, str] = {}
 _process_routes: dict[str, tuple] = {}
 _emitter_installed = False
 _process_sinks_installed = False
-_connection_hook_installed = False
 
 
 def _emit(sid, event, payload) -> None:
@@ -134,20 +133,18 @@ def _install_process_sinks() -> None:
 
 
 def _install_connection_hook() -> None:
-    """``connection.update`` for an operation opened by one of our turns, on the session that owns it
-    (by session key, as for processes); any other operation keeps the hook installed before (the
-    sidecar's, for its own sessions)."""
-    global _connection_hook_installed
-    if _connection_hook_installed:
-        return
+    """``connection.update`` for an operation opened by one of our turns, on the session that owns it (same session key and profile, as the sidecar matches its own); any other operation goes to the hook this one wraps (the sidecar's, for its own sessions). Re-wraps whenever another hook replaced it, so install order does not matter."""
     from tools.connectors.operation import ConnectionOperation
     previous = ConnectionOperation.on_change
+    if getattr(previous, "_local_desktop_ui", False):
+        return
 
     def on_change(operation, change, snapshot):
+        from hermes_constants import hermes_home_key
         with _lock:
             route = _process_routes.get(operation.session_key)
         live = route[0].sessions.get(route[1]) if route is not None else None
-        if live is None:
+        if live is None or hermes_home_key(route[0].profile_id) != operation.profile_key:
             if previous is not None:
                 previous(operation, change, snapshot)
             return
@@ -156,8 +153,8 @@ def _install_connection_hook() -> None:
                    "owner": {"type": "session", "session_id": route[1]}}
         live.event_stream.publish(route[1], connector_ui_payload(payload), event_type="connection.update")
 
+    on_change._local_desktop_ui = True
     ConnectionOperation.on_change = staticmethod(on_change)
-    _connection_hook_installed = True
 
 
 def _ask_result(turn, agent, method, params, timeout):
