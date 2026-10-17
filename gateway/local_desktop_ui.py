@@ -22,10 +22,7 @@ execution stream, and the process sinks route by the process's ``session_key`` t
 session's event stream (a background process outlives the turn that started it). The callbacks
 are installed per turn on the cached agent and restored with the other turn sinks.
 
-Card for ``manage_connections``: ``connection_callback`` publishes ``connection.request`` on the turn,
-and each later change of an operation is published as ``connection.update`` on the session that owns
-it (looked up by its session key, the route); the card answers through ``connection.respond``
-(``gateway/session_connections.py``).
+Card for ``manage_connections``: ``connection_callback`` publishes ``connection.request`` on the turn, and each later change of an operation is published as ``connection.update`` on the session that owns it (looked up by its session key, the route); the card answers through ``connection.respond`` (``gateway/session_connections.py``).
 """
 from __future__ import annotations
 

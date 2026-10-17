@@ -34,8 +34,7 @@ def _validate(action, args):
 
 
 async def _subgoal(connection, ref, params, action, args):
-    """A criterion button on the session's goal manager. A goal that is gone or an index that no longer
-    exists is a refusal the card shows; the typed /subgoal command reports the same cases as text."""
+    """A criterion button on the session's goal manager. A goal that is gone or an index that no longer exists is a refusal the card shows; the typed /subgoal command reports the same cases as text."""
     from pathlib import Path
     from agent.i18n import t
     from gateway.platforms.base import MessageEvent

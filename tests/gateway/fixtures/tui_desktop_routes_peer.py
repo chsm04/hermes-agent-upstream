@@ -222,7 +222,7 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     from gateway.run import _profile_runtime_scope
     from tools.connectors import live
     from tools.connectors.contract import Actor, TargetState
-    import tools.connectors as connectors
+    from tools import connectors
     from tools.connectors.gateway.errors import GatewayAuthError
     from tools.connectors.operation import ConnectionOperation, Target
 
