@@ -43,12 +43,22 @@ def pending_connection(authority, session_id):
 
 
 def _request(method, params):
+    """The validated envelope and, for ``connection.respond``, the answer validated on its own as the legacy handler does: a bad answer is ``INVALID_ANSWER``, not a bad envelope."""
     from pydantic import ValidationError
+    from tui_gateway.contracts.connectors_operation import ConnectionAnswer, ConnectionOperationParams
     from tui_gateway.contracts.registry import METHODS as CONTRACTS
+    respond = method == 'connection.respond'
+    contract = ConnectionOperationParams if respond else CONTRACTS[method].params
     try:
-        return CONTRACTS[method].params.model_validate(params)
+        request = contract.model_validate({k: v for k, v in params.items() if not (respond and k == 'result')})
     except ValidationError as exc:
         raise ConnectorRefusal(4000, 'INVALID_PARAMS', 'Connector parameters are invalid.') from exc
+    if not respond:
+        return request, None
+    try:
+        return request, ConnectionAnswer.model_validate(params.get('result'))
+    except ValidationError as exc:
+        raise ConnectorRefusal(4002, 'INVALID_ANSWER', 'Connection answer is invalid.') from exc
 
 
 def _view(operation):
@@ -61,7 +71,7 @@ async def _handle(connection, method, _ref, params):
     from gateway.session_busy_controls import authorize
     from gateway.session_contract import SessionRef
     from tools.connectors import live
-    request = _request(method, params)
+    request, answer = _request(method, params)
     authority = connection.authority
     ref = SessionRef(authority.profile_id, request.owner.session_id)
     # Capability before existence, as every authority verb: a refused caller learns nothing about the id.
@@ -81,7 +91,7 @@ async def _handle(connection, method, _ref, params):
         operation.wake.set()
         return {'status': 'ok'}
     if method == 'connection.respond':
-        return await asyncio.to_thread(_respond, operation, request.result)
+        return await asyncio.to_thread(_respond, operation, answer)
     return await asyncio.to_thread(_retry, authority, ref, operation, request)
 
 
